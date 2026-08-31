@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#8b1f24">
+<title>老家小苑｜AI 小红书助手</title>
+<style>
+:root{--red:#8b1f24;--red-dark:#681519;--cream:#fff7ec;--paper:#fffdf9;--ink:#271c18;--muted:#796d65;--line:#e8dace;--gold:#b78a48}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#f9eee2 0,#fffaf5 55%,#f4e8db 100%);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+.app{max-width:520px;margin:auto;min-height:100vh;padding:14px 15px 35px}
+.hero{padding:27px 21px 25px;border-radius:25px;color:#fff;background:linear-gradient(145deg,var(--red),var(--red-dark));box-shadow:0 15px 35px #5d171c24}
+.eyebrow{font-size:11px;letter-spacing:2px;opacity:.78}.hero h1{font-family:Georgia,"Songti SC",serif;font-size:34px;margin:8px 0 6px}.hero p{font-size:14px;line-height:1.65;margin:0;opacity:.92}
+.card{margin-top:14px;padding:19px;border-radius:21px;background:rgba(255,253,249,.97);box-shadow:0 8px 25px #57361b0d;border:1px solid #fff}
+.step{font-size:10px;letter-spacing:1.6px;font-weight:900;color:var(--gold)}h2{font-size:19px;margin:7px 0 4px}.hint{font-size:12px;line-height:1.6;color:var(--muted)}
+.drop{display:block;margin-top:14px;padding:28px 14px;border:1.5px dashed #cbb5a0;border-radius:17px;background:var(--cream);text-align:center;cursor:pointer}.drop .camera{font-size:33px}.drop strong{display:block;margin:5px}.drop span{font-size:12px;color:var(--muted)}#photos{display:none}
+.preview{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:10px}.photo-card{position:relative;min-width:0}.photo-card img{display:block;width:100%;aspect-ratio:1;object-fit:cover;border-radius:11px}.remove-photo{position:absolute;top:5px;right:5px;width:32px;height:32px;border:0;border-radius:50%;background:rgba(39,28,24,.78);color:#fff;font-size:18px;line-height:27px;padding:0;cursor:pointer}.photo-count{font-size:11px;color:var(--muted);margin-top:8px;text-align:center}
+.btn{width:100%;border:0;border-radius:14px;padding:14px;margin-top:12px;font:inherit;font-weight:850;cursor:pointer}.btn:disabled{opacity:.55}.primary{background:var(--red);color:white}.soft{background:#f3e5d6;color:var(--red)}
+.loading{display:none;padding:15px;text-align:center;color:var(--red);font-size:13px}.loading.show{display:block}
+.result{display:none}.result.show{display:block}.label{font-size:12px;color:var(--muted);font-weight:800;margin-top:14px}.title{font-size:20px;line-height:1.45;font-weight:900;margin-top:6px}.body{margin-top:7px;padding:15px;background:#fff8ef;border:1px solid var(--line);border-radius:14px;white-space:pre-wrap;font-size:14px;line-height:1.75}
+.error{color:#a01818;font-size:13px;margin-top:10px}.footer{text-align:center;color:#8d8078;font-size:11px;line-height:1.7;margin-top:20px}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="hero">
+<div class="eyebrow">HOMETOWN GARDEN RESTAURANT</div>
+<h1>老家小苑</h1>
+<p>上传这一餐的照片，AI 帮你写好一篇自然的小红书分享。</p>
+</header>
+
+<section class="card">
+<div class="step">STEP 01 · UPLOAD</div>
+<h2>📸 上传你的照片</h2>
+<div class="hint">不用写菜名、不用填资料。AI 会看照片，再参考老家小苑的真实 Menu。</div>
+<label class="drop" for="photos">
+<div class="camera">📷</div><strong>最多 9 张照片，可重复点击「添加照片」继续加入</strong><span>菜品、餐桌、环境都可以；选错可按 × 删除</span>
+<input id="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple style="display:none"><button id="addPhotos" class="upload-btn" type="button">📸 添加照片</button>
+</label>
+<div id="preview" class="preview"></div><div id="photoCount" class="photo-count"></div>
+<button id="generate" class="btn primary">✨ 帮我写小红书</button>
+<div id="loading" class="loading">AI 正在看照片和整理文案…</div>
+<div id="error" class="error"></div>
+</section>
+
+<section id="result" class="card result">
+<div class="step">STEP 02 · READY</div>
+<h2>✨ 写好了</h2>
+<div class="label">小红书标题</div>
+<div id="title" class="title"></div>
+<div class="label">小红书正文</div>
+<div id="body" class="body"></div>
+<button id="copy" class="btn soft">📋 复制标题 + 正文</button>
+<button id="share" class="btn soft">📱 分享</button>
+<button id="xhs" class="btn primary">🔴 打开小红书</button>
+</section>
+
+<footer class="footer">
+老家小苑 Hometown Garden Restaurant<br>
+#槟城美食 #槟城BayanLepas #槟城午餐 #槟城晚餐 #槟城
+</footer>
+</div>
+
+<script>
+const photos=document.querySelector("#photos"),preview=document.querySelector("#preview");
+const generate=document.querySelector("#generate"),loading=document.querySelector("#loading");
+const error=document.querySelector("#error"),result=document.querySelector("#result");
+const photoCount=document.querySelector("#photoCount");
+
+const WORKER_URL="https://laojia-xiaoyuan-ai.hometowngarden7339.workers.dev/";
+let selected=[];
+
+function fileKey(file){
+  return `${file.name}|${file.size}|${file.lastModified}`;
+}
+
+function renderPreview(){
+  preview.innerHTML="";
+  selected.forEach((file,index)=>{
+    const card=document.createElement("div");
+    card.className="photo-card";
+
+    const img=document.createElement("img");
+    img.alt=`照片 ${index+1}`;
+    img.src=URL.createObjectURL(file);
+
+    const remove=document.createElement("button");
+    remove.type="button";
+    remove.className="remove-photo";
+    remove.setAttribute("aria-label",`删除照片 ${index+1}`);
+    remove.textContent="×";
+    remove.addEventListener("click",()=>{
+      selected.splice(index,1);
+      renderPreview();
+      photos.value="";
+      error.textContent="";
+      result.classList.remove("show");
+    });
+
+    card.appendChild(img);
+    card.appendChild(remove);
+    preview.appendChild(card);
+  });
+
+  photoCount.textContent = selected.length
+    ? `已选择 ${selected.length} / 9 张照片`
+    : "";
+}
+
+document.querySelector("#addPhotos").addEventListener("click",()=>{
+  if(selected.length>=9){
+    error.textContent="已经达到 9 张照片上限。";
+    return;
+  }
+  photos.click();
+});
+
+photos.addEventListener("change",()=>{
+  const incoming=Array.from(photos.files || []);
+
+  for(const file of incoming){
+    if(selected.length>=9) break;
+
+    const isImage = /^image\/(jpeg|png|webp)$/i.test(file.type);
+    if(!isImage) continue;
+
+    if(!selected.some(existing=>fileKey(existing)===fileKey(file))){
+      selected.push(file);
+    }
+  }
+
+  photos.value="";
+  error.textContent = selected.length>=9 ? "已达到最多 9 张照片。" : "";
+  renderPreview();
+  result.classList.remove("show");
+});
+
+generate.addEventListener("click",async()=>{
+  if(!selected.length){
+    error.textContent="请先上传照片。";
+    return;
+  }
+
+  const fd=new FormData();
+  selected.forEach(file=>fd.append("photos",file));
+
+  generate.disabled=true;
+  loading.classList.add("show");
+  error.textContent="";
+
+  try{
+    const response=await fetch(WORKER_URL,{method:"POST",body:fd});
+    const data=await response.json();
+
+    if(!response.ok) throw new Error(data.error||"生成失败");
+
+    document.querySelector("#title").textContent=data.title;
+    document.querySelector("#body").textContent=data.body;
+    result.classList.add("show");
+    result.scrollIntoView({behavior:"smooth",block:"start"});
+  }catch(e){
+    error.textContent=e.message;
+  }finally{
+    generate.disabled=false;
+    loading.classList.remove("show");
+  }
+});
+
+document.querySelector("#copy").addEventListener("click",async()=>{
+  const text=document.querySelector("#title").textContent+"\n\n"+document.querySelector("#body").textContent;
+  try{
+    await navigator.clipboard.writeText(text);
+    alert("标题和正文已经复制。");
+  }catch{
+    alert("复制失败，请长按文字复制。");
+  }
+});
+
+document.querySelector("#share").addEventListener("click",async()=>{
+  const text=document.querySelector("#title").textContent+"\n\n"+document.querySelector("#body").textContent;
+
+  if(navigator.share){
+    try{
+      await navigator.share({
+        title:document.querySelector("#title").textContent,
+        text
+      });
+    }catch{}
+  }else{
+    try{
+      await navigator.clipboard.writeText(text);
+      alert("已复制，可以使用手机分享菜单。");
+    }catch{
+      alert("当前浏览器不支持系统分享。");
+    }
+  }
+});
+
+document.querySelector("#xhs").addEventListener("click",()=>{
+  window.location.href="xhsdiscover://";
+  setTimeout(()=>window.open("https://www.xiaohongshu.com/","_blank"),900);
+});
+
+renderPreview();
+</script>
+</body>
+</html>
